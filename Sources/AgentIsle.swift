@@ -346,6 +346,29 @@ final class IsleModel: ObservableObject {
         }
     }
 
+    var compactStatusText: String {
+        if !connected { return "未连接" }
+        if waiting > 0 { return "\(waiting) 待输入" }
+        if running > 0 { return "\(running) 进行中" }
+        let unread = eligibleSessions.filter { isUnread($0) }.count
+        return unread > 0 ? "\(unread) 条待读" : "暂无进行中"
+    }
+    var compactStatusShort: String {
+        if !connected { return "离线" }
+        if waiting > 0 { return "\(waiting) 待你" }
+        if running > 0 { return "\(running) 运行" }
+        let unread = eligibleSessions.filter { isUnread($0) }.count
+        return unread > 0 ? "\(unread) 待读" : "空闲"
+    }
+    var compactStatusColor: Color {
+        if !connected || waiting > 0 { return .orange }
+        if running > 0 { return .mint }
+        return eligibleSessions.contains(where: { isUnread($0) }) ? .green : .gray
+    }
+    var compactStatusDetail: String {
+        let counts = "\(running) 个任务进行中 · \(waiting) 个需要输入 · \(eligibleSessions.filter { isUnread($0) }.count) 个完成待读"
+        return connected ? counts : "监听器未连接 · 上次记录：" + counts
+    }
     var primarySourceColor: Color {
         let provider = eligibleSessions.first(where: { $0.status == "running" || $0.status == "waiting" })?.provider ?? eligibleSessions.first?.provider ?? "codex"
         return providerColor(provider)
@@ -506,22 +529,28 @@ struct IsleView: View {
                         }.frame(width: model.wingWidth)
                         Color.black.frame(width: model.notchWidth)
                         HStack(spacing: 5) {
-                            Circle().fill(model.waiting > 0 ? Color.orange : .mint).frame(width: 4, height: 4)
-                            Text(model.waiting > 0 ? "\(model.waiting) 需确认" : "ISLE").font(.system(size: 9, weight: .semibold, design: .monospaced)).foregroundColor(.gray)
-                        }.frame(width: model.wingWidth)
+                            Circle().fill(model.compactStatusColor).frame(width: 4, height: 4)
+                            ViewThatFits(in: .horizontal) {
+                                if model.connected && model.waiting > 0 && model.running > 0 {
+                                    Text("\(model.running)运行 · \(model.waiting)待你").font(.system(size: 9, weight: .semibold)).fixedSize(horizontal: true, vertical: false)
+                                }
+                                Text(model.compactStatusText).fixedSize(horizontal: true, vertical: false)
+                                Text(model.compactStatusShort).lineLimit(1).minimumScaleFactor(0.75)
+                            }.font(.system(size: 10, weight: .semibold)).monospacedDigit().foregroundColor(model.compactStatusColor)
+                        }.padding(.horizontal, 6).frame(width: model.wingWidth).help(model.compactStatusDetail)
                     }
                 } else {
                     HStack(spacing: 8) {
                         AgentAvatar(preferences: model.preferences, color: model.primarySourceColor, active: model.running > 0).scaleEffect(0.6).frame(width: 27, height: 25)
                         Text("AGENT ISLE").font(.system(size: 9, weight: .bold, design: .monospaced)).tracking(1.2)
                         Spacer()
-                        Text(model.waiting > 0 ? "\(model.waiting) 需确认" : "\(model.running) 进行中").font(.system(size: 10)).foregroundColor(model.waiting > 0 ? .orange : .mint)
+                        Text(model.compactStatusText).font(.system(size: 10)).monospacedDigit().foregroundColor(model.compactStatusColor).lineLimit(1).minimumScaleFactor(0.75).help(model.compactStatusDetail)
                         Image(systemName: "chevron.down").font(.system(size: 8)).foregroundColor(.gray)
                     }.padding(.horizontal, 13).frame(width: model.compactWidth)
                 }
             } }.buttonStyle(.plain).focusEffectDisabled().frame(maxWidth: .infinity).frame(height: model.compactHeight)
              .contentShape(Rectangle())
-             .accessibilityLabel("Agent Isle 收起态，\(model.running) 个任务进行中")
+             .accessibilityLabel("Agent Isle 收起态，" + model.compactStatusDetail).accessibilityValue(model.compactStatusText)
             if let alert = model.banner {
                 Button {
                     if let target = model.sessions.first(where: { $0.key == alert.key }) { model.jump(target) }

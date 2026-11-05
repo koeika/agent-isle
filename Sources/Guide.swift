@@ -13,7 +13,7 @@ final class GuideController {
         guard !starting else { return }; starting = true
         let child = Process(), output = Pipe()
         PythonRuntime.configure(child, resources: resources)
-        child.arguments = [resources.appendingPathComponent("agent_isle/guide.py").path, "--assets", resources.appendingPathComponent("Guide").path, "--version", Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.6.0"]
+        child.arguments = [resources.appendingPathComponent("agent_isle/guide.py").path, "--assets", resources.appendingPathComponent("Guide").path, "--version", Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.6.1"]
         child.standardOutput = output
         child.standardError = FileHandle.nullDevice
         do {

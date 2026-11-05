@@ -49,7 +49,7 @@ struct SettingsView: View {
                     }.buttonStyle(.plain).focusEffectDisabled().accessibilityLabel(item.title)
                 }
                 Spacer()
-                Text("0.6.0 · FREE & LOCAL").font(.system(size: 9)).foregroundColor(.secondary).padding(8)
+                Text("0.6.1 · FREE & LOCAL").font(.system(size: 9)).foregroundColor(.secondary).padding(8)
             }.padding(.horizontal, 10).padding(.top, 12).frame(width: 168).background(Color(nsColor: .windowBackgroundColor))
             Divider()
             ScrollView {
@@ -352,7 +352,7 @@ struct SettingsView: View {
     func shortcutLine(_ text: String, _ keys: String) -> some View { HStack { Text(text); Spacer(); Text(keys).foregroundColor(.secondary).font(.system(size: 11, design: .monospaced)) } }
     var about: some View {
         VStack(alignment: .leading, spacing: 17) {
-            group("") { HStack { AgentAvatar(preferences: preferences); VStack(alignment: .leading, spacing: 3) { Text("Agent Isle").font(.system(size: 20, weight: .bold)); note("版本 0.6.0 · 独立免费实现") } }; note("Codex、Cursor、Claude Code、DS Harness 本机任务监听与状态提醒，跳转能力因工具而异。无需账户，无遥测，无订阅。") }
+            group("") { HStack { AgentAvatar(preferences: preferences); VStack(alignment: .leading, spacing: 3) { Text("Agent Isle").font(.system(size: 20, weight: .bold)); note("版本 0.6.1 · 独立免费实现") } }; note("Codex、Cursor、Claude Code、DS Harness 本机任务监听与状态提醒，跳转能力因工具而异。无需账户，无遥测，无订阅。") }
             group("诊断与维护") {
                 Button("打开本地使用指引…") { model.openGuide?() }
                 Button("导出匿名诊断报告…") { exportDiagnostics() }
@@ -385,7 +385,7 @@ struct SettingsView: View {
     func exportDiagnostics() {
         let panel = NSSavePanel(); panel.nameFieldStringValue = "Agent-Isle-Diagnostics.json"; panel.allowedContentTypes = [.json]
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do { let values: [String: Any] = ["version":"0.6.0", "connected":model.connected, "running":model.running, "waiting":model.waiting, "sessionCount":model.sessions.count, "notchWidth":model.notchWidth, "notchHeight":model.notchHeight, "panelWidth":preferences.value.panelWidth]; try JSONSerialization.data(withJSONObject: values, options: [.prettyPrinted, .sortedKeys]).write(to: url, options: .atomic); status = "匿名报告已导出。" }
+        do { let values: [String: Any] = ["version":"0.6.1", "connected":model.connected, "running":model.running, "waiting":model.waiting, "sessionCount":model.sessions.count, "notchWidth":model.notchWidth, "notchHeight":model.notchHeight, "panelWidth":preferences.value.panelWidth]; try JSONSerialization.data(withJSONObject: values, options: [.prettyPrinted, .sortedKeys]).write(to: url, options: .atomic); status = "匿名报告已导出。" }
         catch { status = "导出失败：" + error.localizedDescription }
     }
     func startRecording() {
