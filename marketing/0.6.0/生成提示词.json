@@ -1,0 +1,21 @@
+{
+  "tool": "built-in image_gen",
+  "mode": "edit",
+  "version": "0.6.0",
+  "date": "2026-11-05",
+  "ui": "illustration; fictional example conversations; no customer data",
+  "prompts": [
+    {
+      "image": 1,
+      "prompt": "Edit this existing Agent Isle Chinese marketing poster into an accurate 0.6.0 four-tool edition. Preserve the exact mint pixel robot brand, ivory paper texture, mint waves, large beautiful black Chinese typography, headline '你的 AI 在忙，你不必一直盯着。', laptop crop, professional composition, and 1536x1024 landscape format. Rebalance the lower layout as needed to fit FOUR distinct task rows in the black app panel: mint Codex 'website · 优化首页' / '正在编辑样式'; peach Claude Code 'api · 接口联调' / '需要你确认'; purple Cursor 'tests · 完成回归' / '已完成'; blue #5B9BFF DS Harness 'agent · 监听测试' / '已完成'. Keep header counters logically correct: '1 进行中 · 1 需要你' in BOTH compact bar and expanded panel (other two tasks completed). Left value callouts exact: '四工具统一监听', '完成与输入提醒', '点按打开任务入口'. Replace bottom tool list with 'Codex · Claude Code · Cursor · DS Harness'. Bottom right small text '软件免费 · 本地运行 · macOS 14+'. Add a small but clearly readable line near panel or bottom: 'DS Harness 当前仅打开应用，不定位聊天'. Add small top right version badge '0.6.0'. Keep '界面示意'. Do not imply four tools all have exact chat jumps, cloud sync, universal AI coverage, or paid software licensing. Use only fictional sample task titles. High-quality finished advertisement with precise Chinese text and generous whitespace."
+    },
+    {
+      "image": 2,
+      "prompt": "Edit this existing second Agent Isle marketing poster to match the 0.6.0 four-tool edition. Preserve existing exact headline '该你出场时，小岛会提醒。', subhead, pixel robot brand, cream paper and mint visual style, clean 1536x1024 landscape composition. Keep three one-line event pills for completed/needs input/error, illustrating distinct states; change the orange needs-input pill source from Claude Code to 'DS Harness', with a blue #5B9BFF pixel mascot for SOURCE identity, and orange pulse for WAITING status. Source identity blue must remain separate from orange status. First pill Codex completed, third Cursor error. Keep callouts '只展开一行' / '提醒出现，完整列表保持收起' and '声音与动画' / '三类事件，分别设置提示音'. Replace third callout with '点按打开任务入口' and smaller explanatory text in two lines: 'Codex / Cursor / Claude Code 按条件定位' and 'DS Harness 当前仅打开应用，不定位聊天'. Make that distinction readable, not hidden in tiny disclaimer. At bottom retain '悬停展开 · 移出收起 · Ctrl+G 快捷切换'. Footer second short line '支持 Codex · Claude Code · Cursor · DS Harness'. Small note '界面示意 · macOS 14+ · 定位依赖接入与目标身份'. Add top right small '0.6.0'. Do not add speech text other than required. No claims of every terminal supported, guaranteed exact DSH chat selection, paid tiers or model usage included. Beautiful polished cohesive campaign edit."
+    },
+    {
+      "image": 3,
+      "prompt": "Edit this existing third Agent Isle Chinese advertising poster into the 0.6.0 four-tool settings edition. Preserve the exact mint pixel robot brand, large headline '你的小岛，由你做主。', subhead, ivory paper and mint waves, clean premium 1536x1024 landscape layout. Expand left settings card '监听工具与来源颜色' to FOUR rows: checked Codex mint #34DDB7; checked Claude Code peach #E8A17B; unchecked Cursor lavender #A78BFA; unchecked DS Harness blue #5B9BFF. All four rows must be individually legible and truly distinct. This is the shipped DEFAULT selection, so DS Harness and Cursor unchecked. Keep small dark example island with only checked Codex and Claude Code. Keep caption '未勾选，不展示、不提醒'. Keep right logo card with robot/cat/ghost/star and exact labels '机器人' '猫咪' '幽灵' '星光', button '导入自定义 Logo'. Keep detail strip '提示音与音量' / '安静时段' / '尺寸与显示器'. Bottom tagline '数据留在本机，专注留给自己。'. Footer exact '软件本体免费 · 安装指导另行收费 · macOS 14+'. Small caption '界面示意 · DS Harness 无需 Hook，压缩日志需 Harness 运行环境'. Add top right discreet '0.6.0'. Maintain excellent readability and hierarchy with sufficient space, slightly reduce the card icon spacing if necessary. No false paid licensing or cloud processing. Make a finished beautiful revised campaign poster."
+    }
+  ]
+}
