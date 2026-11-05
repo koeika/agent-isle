@@ -49,7 +49,7 @@ struct SettingsView: View {
                     }.buttonStyle(.plain).focusEffectDisabled().accessibilityLabel(item.title)
                 }
                 Spacer()
-                Text("0.5.3 · FREE & LOCAL").font(.system(size: 9)).foregroundColor(.secondary).padding(8)
+                Text("0.6.0 · FREE & LOCAL").font(.system(size: 9)).foregroundColor(.secondary).padding(8)
             }.padding(.horizontal, 10).padding(.top, 12).frame(width: 168).background(Color(nsColor: .windowBackgroundColor))
             Divider()
             ScrollView {
@@ -104,9 +104,9 @@ struct SettingsView: View {
         case "sound": sounds
         case "shortcuts": shortcuts
         case "about": about
-        case "free": group("") { Text("永久免费，无账户、充值或订阅。").font(.headline); note("Agent Isle 是独立实现。三个工具的监听、状态提醒和会话跳转全部在本机运行，无遥测。") }
+        case "free": group("") { Text("永久免费，无账户、充值或订阅。").font(.headline); note("Agent Isle 是独立实现。支持工具的监听、状态提醒和窗口跳转全部在本机运行，无遥测。") }
         default: group("当前版本范围") {
-            note(["usage": "当前版本聚焦本机 Codex、Cursor、Claude Code 会话，不读取账户配额或账单。", "ssh": "当前版本仅监听此 Mac，没有远程主机、SSH 密钥或远程安装功能。", "labs": "当前版本没有修改 AI 审批、自动放行或测试更新通道的功能。现有三个工具的权限策略保持原样。"][page] ?? "")
+            note(["usage": "当前版本聚焦本机 Codex、Cursor、Claude Code、DS Harness 会话，不读取账户配额或账单。", "ssh": "当前版本仅监听此 Mac，没有远程主机、SSH 密钥或远程安装功能。", "labs": "当前版本没有修改 AI 审批、自动放行或测试更新通道的功能。各工具的权限策略保持原样。"][page] ?? "")
         }
         }
     }
@@ -157,7 +157,7 @@ struct SettingsView: View {
                 note("颜色用于像素 Logo 和来源标签。自定义 Logo 保留原色，外圈使用来源色；任务状态颜色单独显示。")
             }
             group("为什么接入方式不同？") {
-                note("Codex 有可直接只读的本机会话索引和记录，因此不用安装 Hook。Claude Code、Cursor 也会发现已有记录，但准确的完成、等待输入状态需要 Hook；Cursor 精确选择聊天 / 终端还需要桥接扩展。")
+                note("Codex 有可直接只读的本机会话索引和记录，因此不用安装 Hook。Claude Code、Cursor 也会发现已有记录，但准确的完成、等待输入状态需要 Hook；Cursor 精确选择聊天 / 终端还需要桥接扩展。DS Harness 只读本机会话日志，无需 Hook；压缩日志使用已安装的 Harness 运行环境解码。当前仅打开应用，不保证定位具体会话。")
             }
             group("CLI Hooks 与 Cursor 桥接") {
                 note("安装前备份并合并已有 Hook；只记录状态，不发送审批响应。安装后请重启 Cursor、新开 Claude Code 会话。")
@@ -352,7 +352,7 @@ struct SettingsView: View {
     func shortcutLine(_ text: String, _ keys: String) -> some View { HStack { Text(text); Spacer(); Text(keys).foregroundColor(.secondary).font(.system(size: 11, design: .monospaced)) } }
     var about: some View {
         VStack(alignment: .leading, spacing: 17) {
-            group("") { HStack { AgentAvatar(preferences: preferences); VStack(alignment: .leading, spacing: 3) { Text("Agent Isle").font(.system(size: 20, weight: .bold)); note("版本 0.5.3 · 独立免费实现") } }; note("Codex、Cursor、Claude Code 本机任务监听、状态提醒与精确跳转。无需账户，无遥测，无订阅。") }
+            group("") { HStack { AgentAvatar(preferences: preferences); VStack(alignment: .leading, spacing: 3) { Text("Agent Isle").font(.system(size: 20, weight: .bold)); note("版本 0.6.0 · 独立免费实现") } }; note("Codex、Cursor、Claude Code、DS Harness 本机任务监听与状态提醒，跳转能力因工具而异。无需账户，无遥测，无订阅。") }
             group("诊断与维护") {
                 Button("打开本地使用指引…") { model.openGuide?() }
                 Button("导出匿名诊断报告…") { exportDiagnostics() }
@@ -385,7 +385,7 @@ struct SettingsView: View {
     func exportDiagnostics() {
         let panel = NSSavePanel(); panel.nameFieldStringValue = "Agent-Isle-Diagnostics.json"; panel.allowedContentTypes = [.json]
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do { let values: [String: Any] = ["version":"0.5.3", "connected":model.connected, "running":model.running, "waiting":model.waiting, "sessionCount":model.sessions.count, "notchWidth":model.notchWidth, "notchHeight":model.notchHeight, "panelWidth":preferences.value.panelWidth]; try JSONSerialization.data(withJSONObject: values, options: [.prettyPrinted, .sortedKeys]).write(to: url, options: .atomic); status = "匿名报告已导出。" }
+        do { let values: [String: Any] = ["version":"0.6.0", "connected":model.connected, "running":model.running, "waiting":model.waiting, "sessionCount":model.sessions.count, "notchWidth":model.notchWidth, "notchHeight":model.notchHeight, "panelWidth":preferences.value.panelWidth]; try JSONSerialization.data(withJSONObject: values, options: [.prettyPrinted, .sortedKeys]).write(to: url, options: .atomic); status = "匿名报告已导出。" }
         catch { status = "导出失败：" + error.localizedDescription }
     }
     func startRecording() {

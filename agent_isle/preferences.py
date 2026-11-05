@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 DEFAULT_SOURCES = frozenset(('codex', 'claude'))
-SOURCES = frozenset(('codex', 'claude', 'cursor'))
+SOURCES = frozenset(('codex', 'claude', 'cursor', 'dsh'))
 
 
 def enabled_sources(state, fallback=DEFAULT_SOURCES):

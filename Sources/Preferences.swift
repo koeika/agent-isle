@@ -17,7 +17,7 @@ struct FilterRule: Codable, Identifiable, Equatable {
 }
 struct IslePreferences: Codable, Equatable {
     var enabledProviders = ["codex", "claude"]
-    var providerColors = ["codex": "34DDB7", "claude": "E8A17B", "cursor": "A78BFA"]
+    var providerColors = ["codex": "34DDB7", "claude": "E8A17B", "cursor": "A78BFA", "dsh": "5B9BFF"]
     var hoverExpand = true
     var hoverDelay = 0.15
     var autoCollapse = true

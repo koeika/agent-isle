@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"), "/guide.css": ("guide.css", "text/css; charset=utf-8"), "/guide.js": ("guide.js", "text/javascript; charset=utf-8"), "/buddy.svg": ("buddy.svg", "image/svg+xml")}
 
 
-def create_server(assets, home=None, version="0.5.3"):
+def create_server(assets, home=None, version="0.6.0"):
     assets, home = Path(assets), Path(home or Path.home())
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -26,7 +26,7 @@ def create_server(assets, home=None, version="0.5.3"):
                         hooks[name] = "agent-isle-owned" in file.read_text()
                     except (OSError, UnicodeError):
                         hooks[name] = False
-                body = json.dumps({"version": version, "tools": {"Codex": (home / ".codex").exists(), "Cursor": (home / ".cursor").exists(), "Claude Code": (home / ".claude").exists()}, "hooks": hooks}).encode()
+                body = json.dumps({"version": version, "tools": {"Codex": (home / ".codex").exists(), "Cursor": (home / ".cursor").exists(), "Claude Code": (home / ".claude").exists(), "DS Harness": (home / ".dsh").exists()}, "hooks": hooks}).encode()
                 mime = "application/json; charset=utf-8"
             elif path in ASSETS:
                 filename, mime = ASSETS[path]
@@ -56,7 +56,7 @@ def create_server(assets, home=None, version="0.5.3"):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--assets", type=Path, required=True)
-    parser.add_argument("--version", default="0.5.3")
+    parser.add_argument("--version", default="0.6.0")
     args = parser.parse_args()
     server = create_server(args.assets, version=args.version)
     print(json.dumps({"url": "http://127.0.0.1:%d/" % server.server_port}), flush=True)

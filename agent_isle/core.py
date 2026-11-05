@@ -7,7 +7,7 @@ import time
 from dataclasses import asdict, dataclass, fields, field
 from pathlib import Path
 
-PROVIDERS = ("codex", "cursor", "claude")
+PROVIDERS = ("codex", "cursor", "claude", "dsh")
 TERMINAL_ENV = ("TERM_PROGRAM", "TERM_SESSION_ID", "ITERM_SESSION_ID", "__CFBundleIdentifier", "TMUX_PANE")
 
 

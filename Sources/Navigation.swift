@@ -45,6 +45,10 @@ final class Navigator {
             completion(NavigationResult(exact: false, code: accepted ? "codex_deeplink_sent" : "codex_handler_missing",
                 message: accepted ? "已按 ID 打开 Codex 对话" : "未找到 Codex 跳转处理程序",
                 evidence: ["accepted": accepted, "sessionId": session.id, "verification": "target-ui-owner-confirmation"]))
+        } else if session.provider == "dsh" {
+            let accepted = NSWorkspace.shared.open(URL(string: "dsh://open")!)
+            completion(NavigationResult(exact: false, code: accepted ? "dsh_app_opened" : "dsh_handler_missing",
+                message: accepted ? "已打开 DS Harness · 当前版本不支持按 ID 选中会话，右键可查看最近对话" : "未找到 DS Harness 跳转处理程序"))
         } else if session.provider == "cursor" {
             work.async {
                 let result = self.editor(session, terminal: false)

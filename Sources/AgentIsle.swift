@@ -27,8 +27,8 @@ struct AgentSession: Decodable, Identifiable, Equatable {
     let completed_at: Double?
     var completionToken: Double { (completed_at ?? 0) > 0 ? completed_at! : updated }
     var key: String { provider + ":" + id }
-    var providerName: String { ["codex": "Codex", "cursor": "Cursor", "claude": "Claude Code"][provider] ?? provider }
-    var color: Color { ["codex": Color.mint, "cursor": Color(red: 0.65, green: 0.67, blue: 1), "claude": Color.orange][provider] ?? .gray }
+    var providerName: String { ["codex": "Codex", "cursor": "Cursor", "claude": "Claude Code", "dsh": "DS Harness"][provider] ?? provider }
+    var color: Color { ["codex": Color.mint, "cursor": Color(red: 0.65, green: 0.67, blue: 1), "claude": Color.orange, "dsh": Color.blue][provider] ?? .gray }
     var stateLabel: String {
         ["running": "进行中", "completed": "已完成", "waiting": "需要你", "idle": "待命", "cancelled": "已中止", "closed": "已关闭", "unknown": "待确认", "error": "出错了"][status] ?? status
     }
@@ -43,6 +43,7 @@ struct AgentSession: Decodable, Identifiable, Equatable {
     }
     var targetLabel: String {
         if terminal?["TTY"] != nil || terminal?["ITERM_SESSION_ID"] != nil { return "返回终端标签" }
+        if provider == "dsh" { return "打开 DS Harness（不定位会话）" }
         if provider == "codex" || provider == "cursor" { return "打开此对话" }
         return "定位原会话"
     }

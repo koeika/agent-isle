@@ -15,6 +15,7 @@ from pathlib import Path
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from agent_isle.dsh import DshTail, dsh_record
 from agent_isle.preferences import enabled_sources, read_receipts
 from agent_isle.core import Store, Tail, codex_record, claude_record, cursor_record, hook_event, latest_codex_prompt
 
@@ -78,6 +79,16 @@ class Monitor:
                 return
             ctx = dict(context or {})
             ctx.update(provider=provider, transcript=str(path), mtime=stat.st_mtime)
+            reader = None
+            if provider == "dsh":
+                ctx.setdefault("id", path.parent.name)
+                if path.suffix == ".jsonl":
+                    with path.open("rb") as f: dsh_record(json.loads(f.readline(1024 * 1024)), ctx)
+                reader = DshTail(path)
+                initial = reader.read()
+                for record in initial[1]:
+                    if record.get("type") == "session": dsh_record(record, ctx); break
+                reader.buffer = initial
             if provider == "codex":
                 # The first record contains session identity even for 200MB logs.
                 with path.open("rb") as f:
@@ -97,8 +108,8 @@ class Monitor:
             if restored and restored.pending_inputs:
                 ctx['input_calls'] = dict(restored.pending_inputs)
             self.contexts[path] = ctx
-            self.tails[path] = Tail(path)
-        except (OSError, ValueError) as exc:
+            self.tails[path] = reader or Tail(path)
+        except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
             self.error(provider + ":discover", exc)
 
     def discover(self):
@@ -150,6 +161,18 @@ class Monitor:
                         self.add(path, provider)
                 except OSError as exc:
                     self.error(provider + ":scan", exc)
+        dsh_home = Path(os.environ.get("DSH_HOME", str(self.home / ".dsh")))
+        self.health["dsh"] = {"available": dsh_home.exists(), "enabled": "dsh" in self.enabled, "mode": "只读本地会话事件 · 无需 Hook"}
+        if "dsh" in self.enabled:
+            try:
+                files = sorted((dsh_home / "sessions").glob("*/*/session.v4.jsonl*"), key=lambda p:p.stat().st_mtime, reverse=True)
+                seen = set()
+                for path in files[:100]:
+                    if path.parent in seen: continue
+                    if path.name not in ("session.v4.jsonl", "session.v4.jsonl.zstd"): continue
+                    seen.add(path.parent)
+                    self.add(path, "dsh")
+            except OSError as exc: self.error("dsh:scan", exc)
         self.health["hooks"] = self.hook_health()
 
     def hook_health(self):
@@ -164,7 +187,7 @@ class Monitor:
         return result
 
     def consume_files(self):
-        adapters = {"codex": codex_record, "claude": claude_record, "cursor": cursor_record}
+        adapters = {"codex": codex_record, "claude": claude_record, "cursor": cursor_record, "dsh": dsh_record}
         for path, tail in list(self.tails.items()):
             ctx = self.contexts[path]
             try:
@@ -184,7 +207,7 @@ class Monitor:
             except FileNotFoundError:
                 del self.tails[path]
                 self.contexts.pop(path, None)
-            except (OSError, ValueError) as exc:
+            except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
                 self.error(ctx["provider"] + ":read", exc)
 
     def consume_hooks(self):

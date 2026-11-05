@@ -1,8 +1,8 @@
 import AppKit
 
 enum SourceAppearance {
-    static let providers = [("codex", "Codex"), ("claude", "Claude Code"), ("cursor", "Cursor")]
-    static let defaults = ["codex": "34DDB7", "claude": "E8A17B", "cursor": "A78BFA"]
+    static let providers = [("codex", "Codex"), ("claude", "Claude Code"), ("cursor", "Cursor"), ("dsh", "DS Harness")]
+    static let defaults = ["codex": "34DDB7", "claude": "E8A17B", "cursor": "A78BFA", "dsh": "5B9BFF"]
     static func hex(_ color: NSColor) -> String {
         guard let rgb = color.usingColorSpace(.sRGB) else { return "34DDB7" }
         return String(format: "%02X%02X%02X", Int((rgb.redComponent * 255).rounded()), Int((rgb.greenComponent * 255).rounded()), Int((rgb.blueComponent * 255).rounded()))
