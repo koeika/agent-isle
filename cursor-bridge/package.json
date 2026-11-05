@@ -1,0 +1,13 @@
+{
+  "name": "agent-isle-bridge",
+  "displayName": "Agent Isle Local Bridge",
+  "description": "Local-only conversation and terminal navigation for Agent Isle. No network services.",
+  "publisher": "agent-isle",
+  "version": "0.1.2",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished", "onUri"],
+  "main": "./extension.js",
+  "license": "MIT",
+  "contributes": { "commands": [{ "command": "agentIsle.bridgeStatus", "title": "Agent Isle: Local Bridge Status" }] }
+}
