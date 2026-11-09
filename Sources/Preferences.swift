@@ -16,10 +16,13 @@ struct FilterRule: Codable, Identifiable, Equatable {
     }
 }
 struct IslePreferences: Codable, Equatable {
+    static let defaultExpandAnimationDuration = 0.22
+    static let expandAnimationRange = 0.0...1.0
     var enabledProviders = ["codex", "claude"]
     var providerColors = ["codex": "34DDB7", "claude": "E8A17B", "cursor": "A78BFA", "dsh": "5B9BFF"]
     var hoverExpand = true
-    var hoverDelay = 0.15
+    var hoverDelay = 0.0
+    var expandAnimationDuration = Self.defaultExpandAnimationDuration
     var autoCollapse = true
     var smartSuppression = true
     var hideFullscreen = true
@@ -59,6 +62,11 @@ struct IslePreferences: Codable, Equatable {
     var inputSound = "Agent Isle"
     var errorSound = "Agent Isle"
     var filters: [FilterRule] = []
+    func panelAnimationDuration(expanded: Bool, reduceMotion: Bool) -> Double {
+        if reduceMotion { return 0 }
+        if !expanded { return Self.defaultExpandAnimationDuration }
+        return min(Self.expandAnimationRange.upperBound, max(Self.expandAnimationRange.lowerBound, expandAnimationDuration))
+    }
     func hidden(cwd: String, prompt: String) -> Bool { filters.contains { $0.matches(cwd: cwd, prompt: prompt) } }
     func soundAllowed(hour: Int) -> Bool {
         guard !quiet, quietHours else { return !quiet }

@@ -20,6 +20,7 @@ private struct SettingsPage: Identifiable {
     ]
 }
 struct SettingsView: View {
+    private var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.6.11" }
     @ObservedObject var model: IsleModel
     @ObservedObject var preferences: AppPreferences
     @State private var page = "general"
@@ -49,7 +50,7 @@ struct SettingsView: View {
                     }.buttonStyle(.plain).focusEffectDisabled().accessibilityLabel(item.title)
                 }
                 Spacer()
-                Text("0.6.1 · FREE & LOCAL").font(.system(size: 9)).foregroundColor(.secondary).padding(8)
+                Text("\(appVersion) · FREE & LOCAL").font(.system(size: 9)).foregroundColor(.secondary).padding(8)
             }.padding(.horizontal, 10).padding(.top, 12).frame(width: 168).background(Color(nsColor: .windowBackgroundColor))
             Divider()
             ScrollView {
@@ -90,9 +91,9 @@ struct SettingsView: View {
                 Text(title).font(.system(size: 12))
                 Spacer()
                 Text(String(format: suffix == "s" ? "%.2f %@" : "%.0f %@", preferences.value[keyPath: key], suffix)).font(.system(size: 11, design: .monospaced)).foregroundColor(.secondary)
-                Button { preferences.value[keyPath: key] = reset } label: { Image(systemName: "arrow.counterclockwise") }.buttonStyle(.plain).focusEffectDisabled().help("恢复默认")
+                Button { preferences.value[keyPath: key] = reset } label: { Image(systemName: "arrow.counterclockwise") }.buttonStyle(.plain).focusEffectDisabled().help("恢复默认").accessibilityLabel("恢复默认：\(title)")
             }
-            Slider(value: binding(key), in: range).controlSize(.small)
+            Slider(value: binding(key), in: range).controlSize(.small).accessibilityLabel(title)
         }
     }
     @ViewBuilder var content: some View {
@@ -120,7 +121,10 @@ struct SettingsView: View {
             }
             group("展开") {
                 toggle("鼠标悬停时展开", \.hoverExpand)
-                slider("悬停时长", \.hoverDelay, range: 0.05...1, reset: 0.15, suffix: "s")
+                slider("悬停时长", \.hoverDelay, range: 0...1, reset: 0, suffix: "s")
+                slider("展开动画时长", \.expandAnimationDuration, range: IslePreferences.expandAnimationRange,
+                       reset: IslePreferences.defaultExpandAnimationDuration, suffix: "s")
+                note("设为 0 秒会直接展开。悬停等待和收起动画各自独立。")
                 toggle("智能抑制", \.smartSuppression, detail: "Cursor 桥接确认正在查看原会话时，悬停不自动展开；无法确认时正常展开。")
             }
             group("可见性") { toggle("全屏时隐藏", \.hideFullscreen); toggle("没有活跃会话时自动隐藏", \.hideIdle, detail: "等待输入的会话也属于活跃会话。隐藏后仍可通过菜单栏或快捷键展开。") }
@@ -352,7 +356,7 @@ struct SettingsView: View {
     func shortcutLine(_ text: String, _ keys: String) -> some View { HStack { Text(text); Spacer(); Text(keys).foregroundColor(.secondary).font(.system(size: 11, design: .monospaced)) } }
     var about: some View {
         VStack(alignment: .leading, spacing: 17) {
-            group("") { HStack { AgentAvatar(preferences: preferences); VStack(alignment: .leading, spacing: 3) { Text("Agent Isle").font(.system(size: 20, weight: .bold)); note("版本 0.6.1 · 独立免费实现") } }; note("Codex、Cursor、Claude Code、DS Harness 本机任务监听与状态提醒，跳转能力因工具而异。无需账户，无遥测，无订阅。") }
+            group("") { HStack { AgentAvatar(preferences: preferences); VStack(alignment: .leading, spacing: 3) { Text("Agent Isle").font(.system(size: 20, weight: .bold)); note("版本 \(appVersion) · 独立免费实现") } }; note("Codex、Cursor、Claude Code、DS Harness 本机任务监听与状态提醒，跳转能力因工具而异。无需账户，无遥测，无订阅。") }
             group("诊断与维护") {
                 Button("打开本地使用指引…") { model.openGuide?() }
                 Button("导出匿名诊断报告…") { exportDiagnostics() }
@@ -385,7 +389,7 @@ struct SettingsView: View {
     func exportDiagnostics() {
         let panel = NSSavePanel(); panel.nameFieldStringValue = "Agent-Isle-Diagnostics.json"; panel.allowedContentTypes = [.json]
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do { let values: [String: Any] = ["version":"0.6.1", "connected":model.connected, "running":model.running, "waiting":model.waiting, "sessionCount":model.sessions.count, "notchWidth":model.notchWidth, "notchHeight":model.notchHeight, "panelWidth":preferences.value.panelWidth]; try JSONSerialization.data(withJSONObject: values, options: [.prettyPrinted, .sortedKeys]).write(to: url, options: .atomic); status = "匿名报告已导出。" }
+        do { let values: [String: Any] = ["version":appVersion, "connected":model.connected, "running":model.running, "waiting":model.waiting, "sessionCount":model.sessions.count, "notchWidth":model.notchWidth, "notchHeight":model.notchHeight, "panelWidth":preferences.value.panelWidth]; try JSONSerialization.data(withJSONObject: values, options: [.prettyPrinted, .sortedKeys]).write(to: url, options: .atomic); status = "匿名报告已导出。" }
         catch { status = "导出失败：" + error.localizedDescription }
     }
     func startRecording() {

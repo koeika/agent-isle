@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import SwiftUI
 import UserNotifications
 import ApplicationServices
@@ -88,11 +89,30 @@ enum JSONValue: Decodable {
     }
 }
 
+private final class InputCuePlayer: NSObject, AVAudioPlayerDelegate {
+    private var player: AVAudioPlayer?
+    var onFinish: ((Bool) -> Void)?
+
+    func play(url: URL, volume: Float) -> Bool {
+        player?.stop()
+        guard let next = try? AVAudioPlayer(contentsOf: url) else { return false }
+        player = next
+        next.delegate = self
+        next.volume = volume
+        return next.play()
+    }
+
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        guard player === self.player else { return }
+        onFinish?(flag)
+    }
+}
+
 final class IsleModel: ObservableObject {
     @Published var sessions: [AgentSession] = []
     @Published var expanded = false
     @Published var pinned = false
-    @Published var hovered = false {
+    var hovered = false {
         didSet { if hovered { freezeSessionOrder() } else if !keyboardMode { interactionOrder = [] } }
     }
     var interactionOrder: [String] = []
@@ -124,12 +144,20 @@ final class IsleModel: ObservableObject {
     @Published var compactWidth: CGFloat = 296
     @Published var wingWidth: CGFloat = 84
     @Published var compactHeight: CGFloat = 30
+    @Published var expandedPanelSize = CGSize(width: 640, height: 200)
     @Published var soundVolume = (UserDefaults.standard.object(forKey: "soundVolume") as? Double) ?? 0.85 {
         didSet { UserDefaults.standard.set(soundVolume, forKey: "soundVolume") }
     }
     var resize: (() -> Void)?
     var process: Process?
     var sound: NSSound?
+    private lazy var inputCue: InputCuePlayer = {
+        let cue = InputCuePlayer()
+        cue.onFinish = { [weak self] success in
+            self?.audit("input-sound-finished", ["success": success])
+        }
+        return cue
+    }()
     var conversationWindow: NSWindow?
     var collapseWork: DispatchWorkItem?
     var notificationQueue: [AgentAlert] = []
@@ -276,7 +304,7 @@ final class IsleModel: ObservableObject {
 
     func setExpanded(_ value: Bool) {
         guard expanded != value else { return }
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { expanded = value }
+        expanded = value
         resize?()
     }
 
@@ -285,15 +313,29 @@ final class IsleModel: ObservableObject {
         let chosen = preferences.value.soundName(status)
         guard chosen != "Off" else { return }
         let file = ["completed": "complete", "waiting": "attention", "error": "error"][status] ?? "complete"
-        sound?.stop()
+        let url: URL?
         if chosen == "Agent Isle" {
-            sound = NSSound(contentsOf: resources.appendingPathComponent("Sounds/\(file).wav"), byReference: false)
+            url = resources.appendingPathComponent("Sounds/\(file).wav")
         } else if chosen.hasPrefix("custom:") {
-            sound = NSSound(contentsOf: stateDir.appendingPathComponent("Sounds").appendingPathComponent(String(chosen.dropFirst(7))), byReference: false)
-        } else { sound = NSSound(named: NSSound.Name(chosen)) }
-        sound?.volume = Float(max(0, min(1, soundVolume)))
-        let played = sound?.play() ?? false
-        audit("sound", ["status": status, "played": played, "preview": force, "volume": soundVolume])
+            url = stateDir.appendingPathComponent("Sounds").appendingPathComponent(String(chosen.dropFirst(7)))
+        } else {
+            url = nil
+        }
+        let volume = Float(max(0, min(1, soundVolume)))
+        sound?.stop()
+        let played: Bool
+        let engine: String
+        if status == "waiting", let url, inputCue.play(url: url, volume: volume) {
+            sound = nil
+            played = true
+            engine = "AVAudioPlayer"
+        } else {
+            sound = url.map { NSSound(contentsOf: $0, byReference: false) } ?? NSSound(named: NSSound.Name(chosen))
+            sound?.volume = volume
+            played = sound?.play() ?? false
+            engine = "NSSound"
+        }
+        audit("sound", ["status": status, "played": played, "preview": force, "volume": soundVolume, "engine": engine])
     }
 
     func preview() {
@@ -350,14 +392,14 @@ final class IsleModel: ObservableObject {
         if !connected { return "未连接" }
         if waiting > 0 { return "\(waiting) 待输入" }
         if running > 0 { return "\(running) 进行中" }
-        let unread = eligibleSessions.filter { isUnread($0) }.count
+        let unread = unreadCompletions.count
         return unread > 0 ? "\(unread) 条待读" : "暂无进行中"
     }
     var compactStatusShort: String {
         if !connected { return "离线" }
         if waiting > 0 { return "\(waiting) 待你" }
         if running > 0 { return "\(running) 运行" }
-        let unread = eligibleSessions.filter { isUnread($0) }.count
+        let unread = unreadCompletions.count
         return unread > 0 ? "\(unread) 待读" : "空闲"
     }
     var compactStatusColor: Color {
@@ -366,7 +408,7 @@ final class IsleModel: ObservableObject {
         return eligibleSessions.contains(where: { isUnread($0) }) ? .green : .gray
     }
     var compactStatusDetail: String {
-        let counts = "\(running) 个任务进行中 · \(waiting) 个需要输入 · \(eligibleSessions.filter { isUnread($0) }.count) 个完成待读"
+        let counts = "\(running) 个任务进行中 · \(waiting) 个需要输入 · \(unreadCompletions.count) 个完成待读"
         return connected ? counts : "监听器未连接 · 上次记录：" + counts
     }
     var primarySourceColor: Color {
@@ -379,14 +421,41 @@ final class IsleModel: ObservableObject {
     func isUnread(_ session: AgentSession) -> Bool {
         session.status == "completed" && readReceipts.isUnread(key: session.key, completion: session.completionToken, unread: session.unread ?? false)
     }
+    var unreadCompletions: [AgentSession] { eligibleSessions.filter { isUnread($0) } }
+
+    func markAllCompletedRead() {
+        let unread = unreadCompletions
+        guard !unread.isEmpty else { return }
+        let completions = Dictionary(unread.map { ($0.key, $0.completionToken) }, uniquingKeysWith: max)
+        if acknowledgeCompletions(completions) {
+            message = "已将 \(completions.count) 条完成会话标为已读"
+        }
+    }
+
     func markViewed(_ session: AgentSession) {
         guard session.status == "completed" else { return }
-        do {
-            try readReceipts.mark(key: session.key, completion: session.completionToken)
-            if banner?.key == session.key && banner?.status == "completed" { dismissReminder() }
-            notificationQueue.removeAll { $0.key == session.key && $0.status == "completed" && $0.at <= session.completionToken }
+        if acknowledgeCompletions([session.key: session.completionToken]) {
             audit("session-viewed", ["provider": session.provider, "completedAt": session.completionToken])
-        } catch { message = "无法保存已读状态：" + error.localizedDescription }
+        }
+    }
+
+    @discardableResult
+    private func acknowledgeCompletions(_ completions: [String: Double]) -> Bool {
+        do {
+            try readReceipts.markAll(completions)
+            func acknowledged(_ alert: AgentAlert) -> Bool {
+                alert.status == "completed" && completions[alert.key].map { alert.at <= $0 } == true
+            }
+            notificationQueue.removeAll(where: acknowledged)
+            if let active = banner, acknowledged(active) {
+                dismissReminder()
+                presentNext()
+            }
+            return true
+        } catch {
+            message = "无法保存已读状态：" + error.localizedDescription
+            return false
+        }
     }
     func activate(_ session: AgentSession) {
         guard !preferences.value.disableJump else { return }
@@ -439,26 +508,32 @@ final class IsleModel: ObservableObject {
         markViewed(session)
         audit("conversation-open", ["provider": session.provider, "hasAssistantMessage": !session.assistant_message.isEmpty])
     }
+    private let auditQueue = DispatchQueue(label: "local.agentisle.audit", qos: .utility)
+
     func audit(_ event: String, _ fields: [String: Any] = [:]) {
-        do {
-            try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-            let url = stateDir.appendingPathComponent("activity.jsonl")
-            if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path), let size = attrs[.size] as? NSNumber, size.intValue > 1_000_000 {
-                let previous = stateDir.appendingPathComponent("activity.previous.jsonl")
-                if FileManager.default.fileExists(atPath: previous.path) { try FileManager.default.removeItem(at: previous) }
-                try FileManager.default.moveItem(at: url, to: previous)
-            }
-            if !FileManager.default.fileExists(atPath: url.path) { FileManager.default.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600]) }
-            var record = fields
-            record["event"] = event
-            record["at"] = Date().timeIntervalSince1970
-            var data = try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
-            data.append(10)
-            let file = try FileHandle(forWritingTo: url)
-            defer { try? file.close() }
-            try file.seekToEnd()
-            try file.write(contentsOf: data)
-        } catch { fputs("Agent Isle diagnostics: \(error.localizedDescription)\n", stderr) }
+        var record = fields
+        record["event"] = event
+        record["at"] = Date().timeIntervalSince1970
+        guard var data = try? JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]) else { return }
+        data.append(10)
+        let directory = stateDir
+        auditQueue.async { [data] in
+            do {
+                let files = FileManager.default
+                try files.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+                let url = directory.appendingPathComponent("activity.jsonl")
+                if let size = (try? files.attributesOfItem(atPath: url.path)[.size]) as? NSNumber, size.intValue > 1_000_000 {
+                    let previous = directory.appendingPathComponent("activity.previous.jsonl")
+                    if files.fileExists(atPath: previous.path) { try files.removeItem(at: previous) }
+                    try files.moveItem(at: url, to: previous)
+                }
+                if !files.fileExists(atPath: url.path) { files.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600]) }
+                let file = try FileHandle(forWritingTo: url)
+                defer { try? file.close() }
+                try file.seekToEnd()
+                try file.write(contentsOf: data)
+            } catch { fputs("Agent Isle diagnostics: \(error.localizedDescription)\n", stderr) }
+        }
     }
 }
 
@@ -507,14 +582,32 @@ struct Confetti: View {
 
 struct IsleView: View {
     @ObservedObject var model: IsleModel
-    let surface = Color.black
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        VStack(spacing: 0) {
-            if model.expanded { expanded } else { collapsed }
+        let duration = model.preferences.value.panelAnimationDuration(expanded: model.expanded, reduceMotion: reduceMotion)
+        GeometryReader { viewport in
+            ZStack(alignment: .top) {
+                if model.expanded {
+                    expanded
+                        .frame(width: model.expandedPanelSize.width, height: model.expandedPanelSize.height, alignment: .top)
+                        .transition(.opacity)
+                } else {
+                    collapsed
+                        .frame(width: model.banner == nil ? model.compactWidth : model.expandedPanelSize.width)
+                        .transition(.opacity)
+                }
+            }
+            .frame(width: viewport.size.width, height: viewport.size.height, alignment: .top)
+            .background(Color.black)
+            .mask(alignment: .top) {
+                UnevenRoundedRectangle(bottomLeadingRadius: model.expanded ? 26 : 14,
+                                       bottomTrailingRadius: model.expanded ? 26 : 14, style: .continuous)
+                    .frame(width: model.expanded || model.banner != nil ? model.expandedPanelSize.width : model.compactWidth,
+                           height: model.expanded ? model.expandedPanelSize.height : model.compactHeight + (model.banner == nil ? 0 : NotchLayout.alertHeight))
+            }
+            .animation(duration > 0 ? .easeOut(duration: duration) : nil, value: model.expanded)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(surface)
-        .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: model.expanded ? 26 : 14, bottomTrailingRadius: model.expanded ? 26 : 14, style: .continuous))
         .preferredColorScheme(.dark)
         .focusEffectDisabled()
     }
@@ -581,6 +674,13 @@ struct IsleView: View {
                         Button(provider.1) { model.filter = provider.0 }
                     }
                 } label: { Image(systemName: "line.3.horizontal.decrease").foregroundColor(.gray) }.menuStyle(.borderlessButton).frame(width: 25).help("筛选会话")
+                Button("全部标为已读") { model.markAllCompletedRead() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .font(.system(size: 10))
+                    .focusEffectDisabled()
+                    .disabled(model.unreadCompletions.isEmpty)
+                    .help("将所有已启用来源中当前可见范围的完成会话标为已读，包含其他来源筛选")
                 iconButton(model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", help: "提示音") { model.muted.toggle() }
                 iconButton("gearshape.fill", help: "设置…") { model.openSettings?() }
             }.padding(.horizontal, 16).padding(.top, 5).padding(.bottom, 6)
@@ -702,6 +802,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     var statusItem: NSStatusItem!
     var observers: [NSObjectProtocol] = []
     var hoverTimer: Timer?
+    var sceneTimer: Timer?
     var interaction = InteractionPolicy()
     var shortcuts: ShortcutController?
     var clickMonitor: Any?
@@ -709,21 +810,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     var distributedObservers: [NSObjectProtocol] = []
     var previousInside = false
     var fullscreen = false
-    var lastSceneCheck = Date.distantPast
     var appliedAvatar = ""
+    private var targetFrame: NSRect?
+    private var canvasFrame: NSRect?
     func applicationDidFinishLaunching(_ notification: Notification) {
         if NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier!).count > 1 { NSApp.terminate(nil); return }
         NSApp.setActivationPolicy(.accessory)
         UNUserNotificationCenter.current().delegate = self
         panel = IslePanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.animationBehavior = .none
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
-        panel.hasShadow = true
+        panel.hasShadow = false
+        panel.acceptsMouseMovedEvents = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = false
-        panel.contentView = RinglessHostingView(rootView: IsleView(model: model))
-        model.resize = { [weak self] in self?.shortcuts?.register(); self?.layout(animated: true) }
+        let hosting = RinglessHostingView(rootView: IsleView(model: model))
+        hosting.onPointerBoundary = { [weak self] event in self?.updatePointer(event: event) }
+        panel.contentView = hosting
+        model.resize = { [weak self] in self?.shortcuts?.register(); self?.layout() }
         model.openSettings = { [weak self] in self?.showSettings() }
         model.openGuide = { [weak self] in self?.showGuide() }
         model.dismissPanel = { [weak self] in self?.dismiss() }
@@ -740,7 +846,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in self?.model.screenLocked = true; self?.model.dismissReminder() })
         observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in self?.model.screenLocked = false })
-        layout(animated: false)
+        layout()
         panel.orderFrontRegardless()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
@@ -749,9 +855,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             button.action = #selector(toggle)
         }
         appliedAvatar = ""
-        layout(animated: false)
-        observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in self?.layout(animated: false) })
-        hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in self?.trackHover() }
+        layout()
+        observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in self?.layout() })
+        // Reconcile visibility changes and honor configured hover/leave delays.
+        hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in self?.updatePointer() }
+        sceneTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in self?.updateFullscreen() }
+        updateFullscreen()
         model.startMonitor()
         if !UserDefaults.standard.bool(forKey: "welcomeGuideShown") { showGuide() }
     }
@@ -797,7 +906,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         model.audit("dismiss", ["untilPointerExit": true])
     }
     func outsideClick() {
-        if model.preferences.value.outsideDismiss && !panel.frame.contains(NSEvent.mouseLocation) {
+        if model.preferences.value.outsideDismiss && !(targetFrame ?? panel.frame).contains(NSEvent.mouseLocation) {
             model.dismissReminder()
             if model.keyboardMode { dismiss() }
         }
@@ -814,7 +923,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         appMenu.addItem(withTitle: "退出 Agent Isle", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         NSApp.mainMenu = menu
     }
-    func layout(animated: Bool) {
+    func layout() {
         let prefs = model.preferences.value
         let appearanceKey = prefs.avatarStyle + ":" + prefs.customLogo
         if appearanceKey != appliedAvatar {
@@ -827,38 +936,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         guard let screen = selected ?? NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.screens.first(where: { $0.frame.origin == .zero }) ?? NSScreen.main else { return }
         let detected = NotchLayout(screen)
         let metrics = NotchLayout(screen: screen.frame, notchWidth: detected.notchWidth, notchHeight: detected.notchHeight, horizontalAdjustment: prefs.notchWidthAdjustment, verticalAdjustment: prefs.notchHeightAdjustment)
-        model.notchWidth = metrics.notchWidth
-        model.notchHeight = metrics.hasNotch ? metrics.contentInset : 0
-        model.compactWidth = metrics.compactWidth
-        model.wingWidth = metrics.wingWidth
-        model.compactHeight = metrics.compactHeight
-        let contentHeight = min(prefs.panelHeight, max(160, Double(model.visibleSessions.count) * prefs.cardHeight + 45))
-        let frame = metrics.frame(expanded: model.expanded, alert: model.banner != nil, width: prefs.panelWidth, height: contentHeight)
-        panel.hasShadow = model.expanded || model.banner != nil
+        let notchHeight = metrics.hasNotch ? metrics.contentInset : 0
+        if model.notchWidth != metrics.notchWidth { model.notchWidth = metrics.notchWidth }
+        if model.notchHeight != notchHeight { model.notchHeight = notchHeight }
+        if model.compactWidth != metrics.compactWidth { model.compactWidth = metrics.compactWidth }
+        if model.wingWidth != metrics.wingWidth { model.wingWidth = metrics.wingWidth }
+        if model.compactHeight != metrics.compactHeight { model.compactHeight = metrics.compactHeight }
+
+        let frame: NSRect
+        if model.expanded {
+            let count = model.eligibleSessions.count { model.filter == "all" || $0.provider == model.filter }
+            let contentHeight = min(prefs.panelHeight, max(160, Double(count) * prefs.cardHeight + 45))
+            frame = metrics.frame(expanded: true, width: prefs.panelWidth, height: contentHeight)
+            if model.expandedPanelSize != frame.size { model.expandedPanelSize = frame.size }
+        } else {
+            frame = metrics.frame(expanded: false, alert: model.banner != nil, width: prefs.panelWidth)
+            if model.banner != nil && model.expandedPanelSize.width != frame.width {
+                model.expandedPanelSize.width = frame.width
+            }
+        }
         let hidden = (prefs.hideFullscreen && fullscreen && !model.keyboardMode) || (prefs.hideIdle && model.running == 0 && model.waiting == 0 && !model.expanded && model.banner == nil)
-        if hidden { panel.orderOut(nil) } else { panel.orderFrontRegardless() }
+        if hidden && panel.isVisible { panel.orderOut(nil) }
+        if !hidden && !panel.isVisible { panel.orderFrontRegardless() }
+
+        // Reserve drawing space once. Resizing a live NSHostingView on hover
+        // blocks the main thread while AppKit negotiates the new window frame.
+        let canvas = metrics.frame(expanded: true, width: prefs.panelWidth, height: prefs.panelHeight)
+        let resizeStart = ProcessInfo.processInfo.systemUptime
+        let resizedCanvas = canvasFrame != canvas
+        if resizedCanvas {
+            canvasFrame = canvas
+            panel.setFrame(canvas, display: false)
+        }
+        guard frame != targetFrame || resizedCanvas else { return }
+        targetFrame = frame
         model.audit("layout", ["expanded": model.expanded, "alert": model.banner != nil,
+                              "nativeFrameMs": (ProcessInfo.processInfo.systemUptime - resizeStart) * 1000,
+                              "configuredAnimationSeconds": prefs.panelAnimationDuration(expanded: model.expanded, reduceMotion: false),
                               "notchWidth": metrics.notchWidth, "notchHeight": metrics.notchHeight,
                               "width": frame.width, "height": frame.height, "top": frame.maxY,
                               "screenTop": screen.frame.maxY, "screenWidth": screen.frame.width, "hidden": hidden, "widthAdjustment": prefs.notchWidthAdjustment, "heightAdjustment": prefs.notchHeightAdjustment, "wingWidth": metrics.wingWidth])
-        if animated {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.22
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                panel.animator().setFrame(frame, display: true)
-            }
-        } else { panel.setFrame(frame, display: true) }
+
     }
-    func trackHover() {
-        if Date().timeIntervalSince(lastSceneCheck) > 0.8 {
-            lastSceneCheck = Date()
-            let next = frontWindowIsFullscreen()
-            if next != fullscreen { fullscreen = next; layout(animated: false) }
-        }
-        let inside = panel.isVisible && panel.frame.contains(NSEvent.mouseLocation)
+    func updateFullscreen() {
+        let next = frontWindowIsFullscreen()
+        if next != fullscreen { fullscreen = next; layout() }
+    }
+
+    func updatePointer(event: NSEvent? = nil) {
+        // A queued boundary event can refer to an earlier panel size or position.
+        let inside = panel.isVisible && (targetFrame ?? panel.frame).contains(NSEvent.mouseLocation)
+        if event?.type == .mouseMoved && inside == previousInside { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        let source = event == nil ? "reconcile" : "tracking-area"
         if inside != previousInside {
             previousInside = inside
-            model.audit("pointer", ["inside": inside, "expanded": model.expanded])
+            model.audit("pointer", ["inside": inside, "expanded": model.expanded, "source": source])
             if inside { model.keyboardMode = false }
         }
         if model.hovered != inside { model.hovered = inside }
@@ -866,9 +999,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // A context menu temporarily owns the pointer, but an independent settings
         // window and reminders never prevent mouse-leave collapse.
         let menuTracking = RunLoop.current.currentMode == .eventTracking
-        if let next = interaction.update(inside: inside, expanded: model.expanded, locked: model.pinned || model.keyboardMode || menuTracking, hover: prefs.hoverExpand && !(prefs.smartSuppression && !model.focusedKeys.isEmpty), autoCollapse: prefs.autoCollapse, delay: prefs.hoverDelay, now: Date().timeIntervalSince1970) {
-            model.audit("pointer-transition", ["expanded": next])
+        if let next = interaction.update(inside: inside, expanded: model.expanded, locked: model.pinned || model.keyboardMode || menuTracking, hover: prefs.hoverExpand && !(prefs.smartSuppression && !model.focusedKeys.isEmpty), autoCollapse: prefs.autoCollapse, delay: prefs.hoverDelay, now: now) {
+            let layoutStart = ProcessInfo.processInfo.systemUptime
             model.setExpanded(next)
+            var fields: [String: Any] = [
+                "expanded": next, "source": source,
+                "decisionMs": (layoutStart - now) * 1000,
+                "layoutMs": (ProcessInfo.processInfo.systemUptime - layoutStart) * 1000
+            ]
+            if let event { fields["eventLatencyMs"] = max(0, now - event.timestamp) * 1000 }
+            model.audit("pointer-transition", fields)
         }
     }
     func frontWindowIsFullscreen() -> Bool {
@@ -891,7 +1031,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         completionHandler()
     }
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) { completionHandler([.banner, .list]) }
-    func applicationWillTerminate(_ notification: Notification) { hoverTimer?.invalidate(); model.process?.terminate(); guide.stop()
+    func applicationWillTerminate(_ notification: Notification) { hoverTimer?.invalidate(); sceneTimer?.invalidate(); model.process?.terminate(); guide.stop()
         for monitor in [clickMonitor, localClickMonitor].compactMap({ $0 }) { NSEvent.removeMonitor(monitor) }
         for observer in distributedObservers { DistributedNotificationCenter.default().removeObserver(observer) } }
 }

@@ -22,7 +22,7 @@ struct InteractionPolicy {
             enteredAt = nil
             suppressedUntilExit = false
             if leftAt == nil { leftAt = now }
-            if expanded && autoCollapse && !locked && now - leftAt! >= 0.28 { return false }
+            if expanded && autoCollapse && !locked && now - leftAt! >= 0.12 { return false }
         }
         return nil
     }

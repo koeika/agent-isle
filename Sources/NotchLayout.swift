@@ -1,6 +1,7 @@
 import AppKit
 
 struct NotchLayout {
+    static let alertHeight: CGFloat = 58
     let screen: NSRect
     let notchWidth: CGFloat
     let notchHeight: CGFloat
@@ -11,7 +12,7 @@ struct NotchLayout {
     var compactWidth: CGFloat { min(screen.width, (hasNotch ? notchWidth + 168 : 296) + max(-64, min(160, horizontalAdjustment))) }
     var compactHeight: CGFloat { max(24, (hasNotch ? max(notchHeight, 32) : 30) + max(-8, min(40, verticalAdjustment))) }
     var contentInset: CGFloat { hasNotch ? max(notchHeight, compactHeight) : 4 }
-    func frame(expanded: Bool, alert: Bool = false, width preferredWidth: CGFloat = 640, height preferredHeight: CGFloat = 650, alertHeight: CGFloat = 58) -> NSRect {
+    func frame(expanded: Bool, alert: Bool = false, width preferredWidth: CGFloat = 640, height preferredHeight: CGFloat = 650, alertHeight: CGFloat = NotchLayout.alertHeight) -> NSRect {
         let width = expanded || alert ? min(max(360, preferredWidth), screen.width - 24) : compactWidth
         let height = expanded ? min(max(160, preferredHeight) + contentInset, screen.height - 40) : compactHeight + (alert ? alertHeight : 0)
         return NSRect(x: screen.midX - width / 2, y: screen.maxY - height, width: width, height: height)

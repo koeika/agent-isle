@@ -12,9 +12,14 @@ final class ReadReceipts {
         unread && (marks[key] ?? -1) < completion
     }
     func mark(key: String, completion: Double) throws {
-        guard completion.isFinite && completion >= 0 else { return }
+        try markAll([key: completion])
+    }
+    func markAll(_ completions: [String: Double]) throws {
         var updated = marks
-        updated[key] = max(updated[key] ?? 0, completion)
+        for (key, completion) in completions where completion.isFinite && completion >= 0 {
+            updated[key] = max(updated[key] ?? 0, completion)
+        }
+        guard updated != marks else { return }
         if updated.count > 1000 {
             updated = Dictionary(uniqueKeysWithValues: updated.sorted { $0.value > $1.value }.prefix(1000).map { ($0.key, $0.value) })
         }

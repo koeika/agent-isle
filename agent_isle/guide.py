@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"), "/guide.css": ("guide.css", "text/css; charset=utf-8"), "/guide.js": ("guide.js", "text/javascript; charset=utf-8"), "/buddy.svg": ("buddy.svg", "image/svg+xml")}
 
 
-def create_server(assets, home=None, version="0.6.1"):
+def create_server(assets, home=None, version="0.6.11"):
     assets, home = Path(assets), Path(home or Path.home())
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -56,7 +56,7 @@ def create_server(assets, home=None, version="0.6.1"):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--assets", type=Path, required=True)
-    parser.add_argument("--version", default="0.6.1")
+    parser.add_argument("--version", default="0.6.11")
     args = parser.parse_args()
     server = create_server(args.assets, version=args.version)
     print(json.dumps({"url": "http://127.0.0.1:%d/" % server.server_port}), flush=True)
